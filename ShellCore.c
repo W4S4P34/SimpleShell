@@ -2,40 +2,45 @@
 
 int main(void)
 {
-    char* input_string;
+    char* input_string;  
 
-    int is_pipe = 0;
-    // If `is_pipe`:
-    // == 0: there is no pipe
-    // == 1: there is 1 pipe    
-
-    init_greeting();
+    initGreeting();
 
     while(1)
     {
         printf("Trungrancanmo> ");
         fflush(stdout);
 
-        input_string = read_cmdline();
+        input_string = readCmdLine();
 
-        printf("%s",input_string);
+        int is_proper_pipe = checkPipeCmd(input_string);
+        // If `is_pipe`:
+        // == 0: there is no pipe
+        // == 1: there is 1 pipe
 
-        // is_pipe = check_pipe_cmd(input_string);
+        switch (is_proper_pipe)
+        {
+        case 0: ;
+            char** args_list = parseCmdLine(input_string);
+            executeCmdLine(args_list);
 
-        // if(is_pipe)
-        // {
-        //     char** args_list;
-        //     args_list = parse_cmdline(input_string);
+            // printf("0\n");
 
-        //     free(args_list);
-        // }
-        // else
-        // {
-        //     char** args_pipe_list;
-        //     args_pipe_list = parse_pipe_cmdline(input_string);
+            free(args_list);
+            break;
+        
+        case 1: ;
+            // char** args_pipe_list;
+            // args_pipe_list = parsePipeCmdLine(input_string);
 
-        //     free(args_pipe_list);
-        // }
+            printf("1\n");
+
+            // free(args_pipe_list);
+            break;
+
+        default:
+            break;
+        }
 
         free(input_string);
     }
@@ -43,10 +48,10 @@ int main(void)
     return EXIT_SUCCESS;
 }
 
-int init_greeting(void)
+int initGreeting(void)
 {
     clear(); // ~system("clear");
-    printf("\n******************************************"); 
+    printf("******************************************"); 
     printf("\n*THE SIMPLE SHELL PROJECT/OS HCMUS 18CLC3*"); 
     printf("\n******************************************");
     char* username = getenv("USER"); 
@@ -59,7 +64,7 @@ int init_greeting(void)
     return 0;
 }
 
-char* read_cmdline(void)
+char* readCmdLine(void)
 {
     char* line = NULL;
     size_t buffer_size = 0;
@@ -68,11 +73,13 @@ char* read_cmdline(void)
     {
         if (feof(stdin)) 
         {
+            printf("\n");
             exit(EXIT_SUCCESS);
         } 
         else  
         {
             perror("readline");
+            printf("\n");
             exit(EXIT_FAILURE);
         }
     }
@@ -80,17 +87,95 @@ char* read_cmdline(void)
     return line;
 }
 
-int check_pipe_cmd(char* line)
+int checkPipeCmd(char* line)
+{
+    char* pipe_checker = NULL;
+    int pipe_counter = 0;
+
+    
+    pipe_checker = strchr(line, '|');
+
+    if(pipe_checker != NULL)
+    {
+        return 1;
+    }
+    else return 0;
+}
+
+char** parseCmdLine(char* cmdline)
+{
+    int buffer_coefficient = 1;
+    int token_count = 0;
+
+    char** token_list = (char**) malloc (
+        TOKENS_BUFFER_SIZE * buffer_coefficient * sizeof(char*));
+    
+    if (!token_list)
+    {
+        printf("Failed to allocate dynamic array.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    char* token = strtok(cmdline, TOKENS_DELIM);
+    while(token != NULL)
+    {
+        token_count++;
+        token_list[token_count - 1] = token;
+
+        if (token_count - 1 >= TOKENS_BUFFER_SIZE * buffer_coefficient) 
+        {
+            buffer_coefficient++;
+            token_list = realloc(
+                token_list, TOKENS_BUFFER_SIZE * buffer_coefficient * sizeof(char*));
+            if (!token_list)
+            {
+                printf("Failed to reallocate dynamic array.\n");
+                exit(EXIT_FAILURE);
+            }
+        }
+    
+        token = strtok(NULL, TOKENS_DELIM);
+    } 
+
+    return token_list;
+}
+
+char** parsePipeCmdLine(char* line)
 {
 
 }
 
-char** parse_cmdline(char* line)
+int executeCmdLine(char** args_list)
 {
+    pid_t pid = fork();  
+  
+    if (pid == -1) // Forking child process failed
+    { 
+        printf("Forking child process failed.\n"); 
+        return 0; 
+    } 
+    else 
+    {
+        if (pid == 0) 
+        { 
+            if (execvp(args_list[0], args_list) == -1) 
+            { 
+                printf("Wrong command. Please check again.\n"); 
+            }
+            exit(0);
+        } 
+        else // Waiting for child to terminate 
+        { 
+            wait(NULL);  
+            return 1; 
+        }  
+    } 
 
+    return 1;
 }
 
-char** parse_pipe_cmdline(char* line)
+int executePipeCmdLine(char** args_list)
 {
 
+    return 0;
 }
