@@ -3,6 +3,10 @@
 int main(void)
 {
     char* input_string;  
+    
+    char** builtin_cmd_list[BUILTIN_LIST_SIZE] = {"help", "history", "cd", "exit"};
+
+    char** history_list[HISTORY_LIST_SIZE];
 
     initGreeting();
 
@@ -22,20 +26,25 @@ int main(void)
         {
         case 0: ;
             char** args_list = parseCmdLine(input_string);
-            executeCmdLine(args_list);
 
-            // printf("0\n");
+            int type = getCmdType(args_list[0], builtin_cmd_list);
+            
+            if (type != -1)
+                executeBuiltinCmdLine(type, args_list);            
+            else
+            {
+                executeBinCmdLine(args_list);
+            }
 
             free(args_list);
             break;
         
         case 1: ;
-            // char** args_pipe_list;
-            // args_pipe_list = parsePipeCmdLine(input_string);
+            char** args_pipe_list = parsePipeCmdLine(input_string);
 
             printf("1\n");
 
-            // free(args_pipe_list);
+            free(args_pipe_list);
             break;
 
         default:
@@ -116,7 +125,16 @@ char** parseCmdLine(char* cmdline)
         exit(EXIT_FAILURE);
     }
 
-    char* token = strtok(cmdline, TOKENS_DELIM);
+    char *temp_cmdline = (char*) malloc (strlen(cmdline) + 1);
+
+    if (temp_cmdline == NULL) 
+    {
+        fprintf(stderr, "parse: failed to allocate temp string for %s\n", cmdline);
+    }
+
+    strcpy(temp_cmdline, cmdline);
+
+    char* token = strtok(temp_cmdline, TOKENS_DELIM);
     while(token != NULL)
     {
         token_count++;
@@ -145,7 +163,39 @@ char** parsePipeCmdLine(char* line)
 
 }
 
-int executeCmdLine(char** args_list)
+int getCmdType(char* line, char** builtin_list)
+{
+    // Return 0 : binary, 1 : builtin
+    for(int i = 0; i < BUILTIN_LIST_SIZE; i++)
+    {
+        if(strcmp(builtin_list[i], line) == 0)
+            return i;
+    }
+    return -1;
+}
+
+int executeBuiltinCmdLine(int line_index, char** args_list)
+{
+    switch(line_index)
+    {
+    case 0: // help
+        break;
+    case 1: // history
+        break;
+    case 2: // cd
+        executeChangeDirCmd(args_list);
+        break;
+    case 3: // exit
+        executeExitCmd();
+        break;
+    default:
+        break;
+    }
+
+    return 0;
+}
+
+int executeBinCmdLine(char** args_list)
 {
     pid_t pid = fork();  
   
@@ -178,4 +228,38 @@ int executePipeCmdLine(char** args_list)
 {
 
     return 0;
+}
+
+// ==========================================================
+// Built-in features
+int executeHelpCmd()
+{
+
+}
+
+int executeHistoryCmd()
+{
+
+}
+
+int executeChangeDirCmd(char** args_list)
+{
+    if (args_list[1] == NULL) 
+    {
+        fprintf(stderr, "cd: expected argument to \"cd\"\n");
+    } 
+    else 
+    {
+        if (chdir(args_list[1]) == -1) 
+        {
+            perror("cd");
+        }
+    }
+    return 1;
+}
+
+int executeExitCmd()
+{
+    exit(EXIT_SUCCESS);
+    return 1;
 }
