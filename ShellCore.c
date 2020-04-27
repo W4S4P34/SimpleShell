@@ -44,19 +44,7 @@ int main(void)
             char** args1_pipe_list = parseCmdLine(cmd_list[0], TOKENS_DELIM);
             char** args2_pipe_list = parseCmdLine(cmd_list[1], TOKENS_DELIM);
 
-            for (int i = 0; i < 2 ; i++)
-            {
-                printf("%s ", args1_pipe_list[i]);
-            }
-
-            printf("\n");
-
-            for (int i = 0; i < 2 ; i++)
-            {
-                printf("%s ", args2_pipe_list[i]);
-            }
-
-            printf("\n");
+            executePipeCmdLine(args1_pipe_list, args2_pipe_list);
 
             free(cmd_list);
             free(args1_pipe_list);
@@ -84,7 +72,7 @@ int initGreeting(void)
     printf("\nWelcome!");
     printf("\n"); 
 
-    sleep(2);
+    sleep(1);
     clear(); // ~system("clear");
     return 0;
 }
@@ -210,34 +198,89 @@ int executeBinCmdLine(char** args_list)
 {
     pid_t pid = fork();  
   
-    if (pid == -1) // Forking child process failed
+    if (pid < 0) // Forking child process failed
     { 
-        printf("Forking child process failed.\n"); 
-        return 0; 
+        printf("Process failed"); 
     } 
     else 
     {
-        if (pid == 0) 
+        if (pid == 0) // Child process
         { 
             if (execvp(args_list[0], args_list) == -1) 
             { 
-                printf("Wrong command. Please check again.\n"); 
+                perror("Process failed"); 
             }
-            exit(0);
+            exit(EXIT_SUCCESS);
         } 
-        else // Waiting for child to terminate 
+        else // Parent process - Waiting for child to terminate 
         { 
             wait(NULL);  
-            return 1; 
         }  
     } 
 
-    return 1;
+    return 0;
 }
 
-int executePipeCmdLine(char** args_list)
+int executePipeCmdLine(char** args1_list, char** args2_list)
 {
-    
+    int pipe_file_descriptor[2];
+    pid_t pid1, pid2;
+
+    if (pipe(pipe_file_descriptor) < 0)
+    {
+        perror("Process failed");
+        return 1;
+    }
+
+    pid1 = fork();
+
+    if (pid1 < 0) // Failed to fork children
+    {
+        perror("Process failed");
+    }
+    else if (pid1 == 0) // Child processing
+    {
+        close(pipe_file_descriptor[0]);
+        dup2(pipe_file_descriptor[1], STDOUT_FILENO);
+        close(pipe_file_descriptor[1]);
+
+        if(execvp(args1_list[0], args1_list) == -1) 
+        {
+            perror("Process failed");
+        }
+        exit(EXIT_SUCCESS);
+    }
+    else // Parent processing
+    {
+        pid2 = fork();
+
+        if(pid2 < 0) // Failed to fork children
+        {
+            perror("Process failed");
+        }
+        else if(pid2 == 0) // Children 2 processing
+        {
+            close(pipe_file_descriptor[1]);
+            dup2(pipe_file_descriptor[0], STDIN_FILENO);
+            close(pipe_file_descriptor[0]);
+            
+            if(execvp(args2_list[0], args2_list) == -1) 
+            {
+                perror("Process failed");
+            }
+            exit(EXIT_SUCCESS);
+        }
+        else // Parent processing
+        {
+            close(pipe_file_descriptor[0]);
+            close(pipe_file_descriptor[1]);
+            wait(NULL);
+        }
+        close(pipe_file_descriptor[0]);
+        close(pipe_file_descriptor[1]);
+        wait(NULL);
+    }
+
     return 0;
 }
 
@@ -245,7 +288,7 @@ int executePipeCmdLine(char** args_list)
 // Built-in features
 int executeHelpCmd()
 {
-    printf("I am Iron Man\n");
+    
 }
 
 int executeHistoryCmd()

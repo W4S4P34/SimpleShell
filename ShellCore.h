@@ -28,7 +28,7 @@ char** parseCmdLine(char*, char*);
 int getCmdType(char*, char**);
 int executeBuiltinCmdLine(int, char**);
 int executeBinCmdLine(char**);
-int executePipeCmdLine(char**);
+int executePipeCmdLine(char**, char**);
 
 // Built-in features
 int executeHelpCmd();
