@@ -4,9 +4,9 @@ int main(void)
 {
     char* input_string;  
     
-    char** builtin_cmd_list[BUILTIN_LIST_SIZE] = {"help", "history", "cd", "exit"};
+    char* builtin_cmd_list[BUILTIN_LIST_SIZE] = {"help", "history", "cd", "exit"};
 
-    char** history_list[HISTORY_LIST_SIZE];
+    char* history_list[HISTORY_LIST_SIZE];
 
     initGreeting();
 
@@ -25,7 +25,7 @@ int main(void)
         switch (is_proper_pipe)
         {
         case 0: ;
-            char** args_list = parseCmdLine(input_string);
+            char** args_list = parseCmdLine(input_string, TOKENS_DELIM);
 
             int type = getCmdType(args_list[0], builtin_cmd_list);
             
@@ -40,11 +40,27 @@ int main(void)
             break;
         
         case 1: ;
-            char** args_pipe_list = parsePipeCmdLine(input_string);
+            char** cmd_list = parseCmdLine(input_string, TOKEN_PIPE_DELIM);
+            char** args1_pipe_list = parseCmdLine(cmd_list[0], TOKENS_DELIM);
+            char** args2_pipe_list = parseCmdLine(cmd_list[1], TOKENS_DELIM);
 
-            printf("1\n");
+            for (int i = 0; i < 2 ; i++)
+            {
+                printf("%s ", args1_pipe_list[i]);
+            }
 
-            free(args_pipe_list);
+            printf("\n");
+
+            for (int i = 0; i < 2 ; i++)
+            {
+                printf("%s ", args2_pipe_list[i]);
+            }
+
+            printf("\n");
+
+            free(cmd_list);
+            free(args1_pipe_list);
+            free(args2_pipe_list);
             break;
 
         default:
@@ -111,7 +127,7 @@ int checkPipeCmd(char* line)
     else return 0;
 }
 
-char** parseCmdLine(char* cmdline)
+char** parseCmdLine(char* cmdline, char* delims)
 {
     int buffer_coefficient = 1;
     int token_count = 0;
@@ -134,7 +150,7 @@ char** parseCmdLine(char* cmdline)
 
     strcpy(temp_cmdline, cmdline);
 
-    char* token = strtok(temp_cmdline, TOKENS_DELIM);
+    char* token = strtok(temp_cmdline, delims);
     while(token != NULL)
     {
         token_count++;
@@ -152,15 +168,10 @@ char** parseCmdLine(char* cmdline)
             }
         }
     
-        token = strtok(NULL, TOKENS_DELIM);
+        token = strtok(NULL, delims);
     } 
 
     return token_list;
-}
-
-char** parsePipeCmdLine(char* line)
-{
-
 }
 
 int getCmdType(char* line, char** builtin_list)
@@ -226,7 +237,7 @@ int executeBinCmdLine(char** args_list)
 
 int executePipeCmdLine(char** args_list)
 {
-
+    
     return 0;
 }
 
@@ -234,7 +245,7 @@ int executePipeCmdLine(char** args_list)
 // Built-in features
 int executeHelpCmd()
 {
-
+    printf("I am Iron Man\n");
 }
 
 int executeHistoryCmd()

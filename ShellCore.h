@@ -10,8 +10,9 @@
 #include <errno.h>
 
 // Macro
-#define TOKENS_BUFFER_SIZE 32
+#define TOKENS_BUFFER_SIZE 64
 #define TOKENS_DELIM " \t\r\n\a"
+#define TOKEN_PIPE_DELIM "|"
 
 #define BUILTIN_LIST_SIZE 4
 
@@ -23,8 +24,7 @@
 int initGreeting(void);
 char* readCmdLine(void);
 int checkPipeCmd(char*);
-char** parseCmdLine(char*);
-char** parsePipeCmdLine(char*);
+char** parseCmdLine(char*, char*);
 int getCmdType(char*, char**);
 int executeBuiltinCmdLine(int, char**);
 int executeBinCmdLine(char**);
