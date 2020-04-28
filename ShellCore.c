@@ -9,7 +9,9 @@ int main(void)
     
     char* builtin_cmd_list[BUILTIN_LIST_SIZE] = {"help", "history", "cd", "exit"};
 
-    char* history_list[HISTORY_LIST_SIZE];
+    char* history_list[HISTORY_LIST_SIZE] = {NULL};
+
+    int history_count = 0;
 
     initGreeting();
 
@@ -45,7 +47,9 @@ int main(void)
 
         username = getenv("USER");
         fprintf(stdout, "@%s: ~%s > ", username, cwd_dir);
-        fflush(stdout);
+        fflush(stdout); 
+        
+        int is_successful = -1;
 
         input_string = readCmdLine();
 
@@ -60,23 +64,23 @@ int main(void)
 
         strcpy(temp_cmdline, input_string);
 
-        int is_proper_pipe = checkPipeCmd(input_string);
+        int is_proper_pipe = checkPipeCmd(temp_cmdline);
         // If `is_pipe`:
         // == 0: there is no pipe
         // == 1: there is 1 pipe
 
         switch (is_proper_pipe)
         {
-        case 0: ;
+        case 0: ;    
             char** args_list = parseCmdLine(temp_cmdline, TOKENS_DELIM);
 
             int type = getCmdType(args_list[0], builtin_cmd_list);
             
             if (type != -1)
-                executeBuiltinCmdLine(type, args_list);            
+                is_successful = executeBuiltinCmdLine(type, args_list, history_list);            
             else
             {
-                executeBinCmdLine(args_list);
+                is_successful = executeBinCmdLine(args_list);
             }
 
             free(args_list);
@@ -125,8 +129,28 @@ int main(void)
             break;
         }
 
+        // Add history
+        temp_cmdline = (char*) malloc(strlen(input_string) + 1);
+                
+        if (temp_cmdline == NULL) 
+        {
+            fprintf(
+                stderr, "allocate failed: failed to allocate temp string for %s.\n", 
+                input_string);
+        }
+
+        strcpy(temp_cmdline, input_string);
+
+        if (is_successful == 0)
+            addHistory(temp_cmdline, history_list, &history_count);
+
         free(input_string);
         free(full_cwd_dir);
+    }
+
+    for(int i=0;i<history_count;i++)
+    {
+        free(history_list[i]);
     }
     
     return EXIT_SUCCESS;
@@ -234,13 +258,14 @@ int getCmdType(char* line, char** builtin_list)
     return -1;
 }
 
-int executeBuiltinCmdLine(int line_index, char** args_list)
+int executeBuiltinCmdLine(int line_index, char** args_list, char** history_list)
 {
     switch(line_index)
     {
     case 0: // help
         break;
     case 1: // history
+        executeHistoryCmd(history_list);
         break;
     case 2: // cd
         executeChangeDirCmd(args_list);
@@ -251,14 +276,18 @@ int executeBuiltinCmdLine(int line_index, char** args_list)
     default:
         break;
     }
-
-    return 0;
+    
+    if (line_index == 1)
+        return -1;
+    else
+        return 0;
 }
 
 int executeBinCmdLine(char** args_list)
 {
     pid_t pid = fork();  
-  
+    int child_value = -1;
+    
     if (pid < 0) // Forking child process failed
     { 
         fprintf(stderr, "process failed: cannot fork children.\n"); 
@@ -270,17 +299,18 @@ int executeBinCmdLine(char** args_list)
             if (execvp(args_list[0], args_list) == -1) 
             { 
                 fprintf(
-                    stderr, "process failed: wrond command or command does not exist.\n"); 
+                    stderr, "process failed: wrond command or command does not exist.\n");
+                exit(EXIT_FAILURE);
             }
             exit(EXIT_SUCCESS);
         } 
         else // Parent process - Waiting for child to terminate 
         { 
-            wait(NULL);  
+            wait(&child_value);  
         }  
     } 
 
-    return 0;
+    return child_value / 255;
 }
 
 int executePipeCmdLine(char** args1_list, char** args2_list)
@@ -351,9 +381,15 @@ int executeHelpCmd()
     
 }
 
-int executeHistoryCmd()
+int executeHistoryCmd(char** history_list)
 {
-
+    for(int i = 0; i < HISTORY_LIST_SIZE; i++)
+    {
+        if (history_list[i] == NULL)
+            break;
+        else
+            fprintf(stdout, "%d   %s", i + 1, history_list[i]);
+    }
 }
 
 int executeChangeDirCmd(char** args_list)
@@ -375,5 +411,31 @@ int executeChangeDirCmd(char** args_list)
 int executeExitCmd()
 {
     exit(EXIT_SUCCESS);
+    return 0;
+}
+
+// ==========================================================
+// Built-in features
+
+int addHistory(char* input_string, char** history_list, int* count)
+{
+    if((*count) < 10)
+    {
+        for(int i = (*count); i >= 0; i--)
+        {
+            history_list[i] = history_list[i - 1];
+        }
+        history_list[0] = input_string;
+        (*count)++;
+    }
+    else
+    {
+        free(history_list[9]);
+        for(int i = 9; i >= 0; i--)
+        {
+            history_list[i] = history_list[i - 1];
+        }
+        history_list[0] = input_string;
+    }
     return 0;
 }

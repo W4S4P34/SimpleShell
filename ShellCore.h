@@ -28,14 +28,17 @@ char* readCmdLine(void);
 int checkPipeCmd(char*);
 char** parseCmdLine(char*, char*);
 int getCmdType(char*, char**);
-int executeBuiltinCmdLine(int, char**);
+int executeBuiltinCmdLine(int, char**, char**);
 int executeBinCmdLine(char**);
 int executePipeCmdLine(char**, char**);
 
 // Built-in features
 int executeHelpCmd();
-int executeHistoryCmd();
+int executeHistoryCmd(char**);
 int executeChangeDirCmd(char**);
 int executeExitCmd();
+
+// Sub features
+int addHistory(char*, char**, int*);
 
 #endif
