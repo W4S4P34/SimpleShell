@@ -7,7 +7,6 @@
 #include <sys/wait.h>
 #include <stdlib.h>
 #include <string.h>
-#include <errno.h>
 
 // Macro
 #define TOKENS_BUFFER_SIZE 64

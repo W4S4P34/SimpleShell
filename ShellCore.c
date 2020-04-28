@@ -2,8 +2,10 @@
 
 int main(void)
 {
-    char* username = NULL, * full_cwd_dir = NULL, * cwd_dir;
+    char* username = NULL, * full_cwd_dir = NULL, * cwd_dir = NULL;
     int cwd_buffer_coefficient;
+
+    int command_check;
 
     char* input_string = NULL;  
     
@@ -12,6 +14,8 @@ int main(void)
     char* history_list[HISTORY_LIST_SIZE] = {NULL};
 
     int history_count = 0;
+
+    int type; // Type of commands: Built-in or Binary
 
     initGreeting();
 
@@ -49,7 +53,7 @@ int main(void)
         fprintf(stdout, "@%s: ~%s > ", username, cwd_dir);
         fflush(stdout); 
         
-        int is_successful = -1;
+        command_check = 1;
 
         input_string = readCmdLine();
 
@@ -74,13 +78,13 @@ int main(void)
         case 0: ;    
             char** args_list = parseCmdLine(temp_cmdline, TOKENS_DELIM);
 
-            int type = getCmdType(args_list[0], builtin_cmd_list);
+            type = getCmdType(args_list[0], builtin_cmd_list);
             
             if (type != -1)
-                is_successful = executeBuiltinCmdLine(type, args_list, history_list);            
+                command_check = executeBuiltinCmdLine(type, args_list, history_list);            
             else
             {
-                is_successful = executeBinCmdLine(args_list);
+                command_check = executeBinCmdLine(args_list);
             }
 
             free(args_list);
@@ -114,7 +118,14 @@ int main(void)
             char** args1_pipe_list = parseCmdLine(temp_cmd1, TOKENS_DELIM);
             char** args2_pipe_list = parseCmdLine(temp_cmd2, TOKENS_DELIM);
 
-            executePipeCmdLine(args1_pipe_list, args2_pipe_list);
+            type = getCmdType(args1_pipe_list[0], builtin_cmd_list);
+
+            if (type != -1)
+                command_check = executeBuiltinCmdLine(type, args1_pipe_list, history_list);            
+            else
+            {
+                command_check = executePipeCmdLine(args1_pipe_list, args2_pipe_list);
+            }
 
             free(cmd_list);
             free(temp_cmdline);
@@ -141,19 +152,22 @@ int main(void)
 
         strcpy(temp_cmdline, input_string);
 
-        if (is_successful == 0)
+        if (command_check == 0)
             addHistory(temp_cmdline, history_list, &history_count);
 
         free(input_string);
         free(full_cwd_dir);
+
+        if (command_check == -1)
+            break;
     }
 
-    for(int i=0;i<history_count;i++)
+    for(int i = 0; i < history_count; i++)
     {
         free(history_list[i]);
     }
-    
-    return EXIT_SUCCESS;
+
+    exit(EXIT_SUCCESS);
 }
 
 int initGreeting(void)
@@ -277,7 +291,7 @@ int executeBuiltinCmdLine(int line_index, char** args_list, char** history_list)
         break;
     }
     
-    if (line_index == 1)
+    if (line_index == 3)
         return -1;
     else
         return 0;
@@ -286,11 +300,11 @@ int executeBuiltinCmdLine(int line_index, char** args_list, char** history_list)
 int executeBinCmdLine(char** args_list)
 {
     pid_t pid = fork();  
-    int child_value = -1;
     
     if (pid < 0) // Forking child process failed
     { 
         fprintf(stderr, "process failed: cannot fork children.\n"); 
+        return 1;
     } 
     else 
     {
@@ -306,11 +320,11 @@ int executeBinCmdLine(char** args_list)
         } 
         else // Parent process - Waiting for child to terminate 
         { 
-            wait(&child_value);  
+            wait(NULL);  
         }  
     } 
 
-    return child_value / 255;
+    return 0;
 }
 
 int executePipeCmdLine(char** args1_list, char** args2_list)
@@ -329,6 +343,8 @@ int executePipeCmdLine(char** args1_list, char** args2_list)
     if (pid1 < 0) // Failed to fork children
     {
         fprintf(stderr, "process failed: cannot fork children.\n"); 
+        return 1;
+
     }
     else if (pid1 == 0) // Child processing
     {
@@ -339,6 +355,7 @@ int executePipeCmdLine(char** args1_list, char** args2_list)
         if(execvp(args1_list[0], args1_list) == -1) 
         {
             fprintf(stderr, "process failed: wrond command or command does not exist.\n"); 
+            exit(EXIT_FAILURE);
         }
         exit(EXIT_SUCCESS);
     }
@@ -349,6 +366,7 @@ int executePipeCmdLine(char** args1_list, char** args2_list)
         if(pid2 < 0) // Failed to fork children
         {
             fprintf(stderr, "process failed: cannot fork children.\n"); 
+            return 1;
         }
         else if(pid2 == 0) // Children 2 processing
         {
@@ -358,7 +376,8 @@ int executePipeCmdLine(char** args1_list, char** args2_list)
             
             if(execvp(args2_list[0], args2_list) == -1) 
             {
-                fprintf(stderr, "process failed: wrond command or command does not exist.\n"); 
+                fprintf(stderr, "process failed: wrond command or command does not exist.\n");
+                exit(EXIT_FAILURE); 
             }
             exit(EXIT_SUCCESS);
         }
@@ -366,9 +385,8 @@ int executePipeCmdLine(char** args1_list, char** args2_list)
         {
             close(pipe_file_descriptor[1]);
             wait(NULL);
-        }
-        close(pipe_file_descriptor[1]);
-        wait(NULL);
+            wait(NULL);
+        }        
     }
 
     return 0;
@@ -390,6 +408,7 @@ int executeHistoryCmd(char** history_list)
         else
             fprintf(stdout, "%d   %s", i + 1, history_list[i]);
     }
+    return 0;
 }
 
 int executeChangeDirCmd(char** args_list)
@@ -410,7 +429,6 @@ int executeChangeDirCmd(char** args_list)
 
 int executeExitCmd()
 {
-    exit(EXIT_SUCCESS);
     return 0;
 }
 
@@ -421,21 +439,17 @@ int addHistory(char* input_string, char** history_list, int* count)
 {
     if((*count) < 10)
     {
-        for(int i = (*count); i >= 0; i--)
-        {
-            history_list[i] = history_list[i - 1];
-        }
-        history_list[0] = input_string;
+        history_list[(*count)] = input_string;
         (*count)++;
     }
     else
     {
-        free(history_list[9]);
-        for(int i = 9; i >= 0; i--)
+        free(history_list[0]);
+        for(int i = 0; i < (*count) - 1; i++)
         {
-            history_list[i] = history_list[i - 1];
+            history_list[i] = history_list[i + 1];
         }
-        history_list[0] = input_string;
+        history_list[9] = input_string;
     }
     return 0;
 }
