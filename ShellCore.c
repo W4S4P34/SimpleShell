@@ -2,7 +2,10 @@
 
 int main(void)
 {
-    char* input_string;  
+    char* username = NULL, * full_cwd_dir = NULL, * cwd_dir;
+    int cwd_buffer_coefficient;
+
+    char* input_string = NULL;  
     
     char* builtin_cmd_list[BUILTIN_LIST_SIZE] = {"help", "history", "cd", "exit"};
 
@@ -12,10 +15,50 @@ int main(void)
 
     while(1)
     {
-        printf("Trungrancanmo> ");
+        cwd_buffer_coefficient = 1;
+        full_cwd_dir = (char*) malloc (
+            MAX_BUFFER_CWD * cwd_buffer_coefficient * sizeof(char));
+
+        if (full_cwd_dir == NULL)
+        {
+            fprintf(stderr, "allocate failed: allocate buffer failed.\n");
+            exit(EXIT_FAILURE);
+        }
+
+        while (getcwd(full_cwd_dir, MAX_BUFFER_CWD * cwd_buffer_coefficient) == NULL)
+        {
+            cwd_buffer_coefficient++;
+            full_cwd_dir = realloc(
+                full_cwd_dir, MAX_BUFFER_CWD * cwd_buffer_coefficient * sizeof(char));
+            
+            if (full_cwd_dir == NULL)
+            {
+                fprintf(stderr, "allocate failed: reallocate buffer failed.\n");
+
+                free(full_cwd_dir);
+
+                exit(EXIT_FAILURE);
+            }
+        }
+
+        cwd_dir = strrchr(full_cwd_dir, '/');
+
+        username = getenv("USER");
+        fprintf(stdout, "@%s: ~%s > ", username, cwd_dir);
         fflush(stdout);
 
         input_string = readCmdLine();
+
+        char* temp_cmdline = (char*) malloc (strlen(input_string) + 1);
+
+        if (temp_cmdline == NULL) 
+        {
+            fprintf(
+                stderr, "allocate failed: failed to allocate temp string for %s.\n", 
+                input_string);
+        }
+
+        strcpy(temp_cmdline, input_string);
 
         int is_proper_pipe = checkPipeCmd(input_string);
         // If `is_pipe`:
@@ -25,7 +68,7 @@ int main(void)
         switch (is_proper_pipe)
         {
         case 0: ;
-            char** args_list = parseCmdLine(input_string, TOKENS_DELIM);
+            char** args_list = parseCmdLine(temp_cmdline, TOKENS_DELIM);
 
             int type = getCmdType(args_list[0], builtin_cmd_list);
             
@@ -37,18 +80,45 @@ int main(void)
             }
 
             free(args_list);
+            free(temp_cmdline);
             break;
         
         case 1: ;
-            char** cmd_list = parseCmdLine(input_string, TOKEN_PIPE_DELIM);
-            char** args1_pipe_list = parseCmdLine(cmd_list[0], TOKENS_DELIM);
-            char** args2_pipe_list = parseCmdLine(cmd_list[1], TOKENS_DELIM);
+            char** cmd_list = parseCmdLine(temp_cmdline, TOKEN_PIPE_DELIM);
+
+            char* temp_cmd1 = (char*) malloc (strlen(cmd_list[0]) + 1);
+
+            if (temp_cmd1 == NULL) 
+            {
+                fprintf(
+                    stderr, "allocate failed: failed to allocate temp string for %s.\n", 
+                    cmd_list[0]);
+            }
+
+            char* temp_cmd2 = (char*) malloc (strlen(cmd_list[1]) + 1);
+
+            if (temp_cmd2 == NULL) 
+            {
+                fprintf(
+                    stderr, "allocate failed: failed to allocate temp string for %s.\n", 
+                    cmd_list[1]);
+            }
+
+            strcpy(temp_cmd1,cmd_list[0]);
+            strcpy(temp_cmd2,cmd_list[1]);
+
+            char** args1_pipe_list = parseCmdLine(temp_cmd1, TOKENS_DELIM);
+            char** args2_pipe_list = parseCmdLine(temp_cmd2, TOKENS_DELIM);
 
             executePipeCmdLine(args1_pipe_list, args2_pipe_list);
 
             free(cmd_list);
+            free(temp_cmdline);
+
             free(args1_pipe_list);
             free(args2_pipe_list);
+            free(temp_cmd1);
+            free(temp_cmd2);
             break;
 
         default:
@@ -56,6 +126,7 @@ int main(void)
         }
 
         free(input_string);
+        free(full_cwd_dir);
     }
     
     return EXIT_SUCCESS;
@@ -86,13 +157,12 @@ char* readCmdLine(void)
     {
         if (feof(stdin)) 
         {
-            printf("\n");
+            fprintf(stdout,"\n");
             exit(EXIT_SUCCESS);
         } 
         else  
         {
-            perror("readline");
-            printf("\n");
+            fprintf(stderr, "read failed: readline has failed (EOF).\n"); 
             exit(EXIT_FAILURE);
         }
     }
@@ -103,8 +173,6 @@ char* readCmdLine(void)
 int checkPipeCmd(char* line)
 {
     char* pipe_checker = NULL;
-    int pipe_counter = 0;
-
     
     pipe_checker = strchr(line, '|');
 
@@ -118,46 +186,39 @@ int checkPipeCmd(char* line)
 char** parseCmdLine(char* cmdline, char* delims)
 {
     int buffer_coefficient = 1;
-    int token_count = 0;
+    int index = 0;
 
     char** token_list = (char**) malloc (
         TOKENS_BUFFER_SIZE * buffer_coefficient * sizeof(char*));
     
     if (!token_list)
     {
-        printf("Failed to allocate dynamic array.\n");
+        fprintf(stderr, "allocate failed: failed to allocate dynamic array.\n");
         exit(EXIT_FAILURE);
     }
 
-    char *temp_cmdline = (char*) malloc (strlen(cmdline) + 1);
-
-    if (temp_cmdline == NULL) 
-    {
-        fprintf(stderr, "parse: failed to allocate temp string for %s\n", cmdline);
-    }
-
-    strcpy(temp_cmdline, cmdline);
-
-    char* token = strtok(temp_cmdline, delims);
+    char* token = strtok(cmdline, delims);
     while(token != NULL)
     {
-        token_count++;
-        token_list[token_count - 1] = token;
+        token_list[index] = token;
+        index++;
 
-        if (token_count - 1 >= TOKENS_BUFFER_SIZE * buffer_coefficient) 
+        if (index >= TOKENS_BUFFER_SIZE * buffer_coefficient) 
         {
             buffer_coefficient++;
             token_list = realloc(
                 token_list, TOKENS_BUFFER_SIZE * buffer_coefficient * sizeof(char*));
             if (!token_list)
             {
-                printf("Failed to reallocate dynamic array.\n");
+                fprintf(stderr, "allocate failed: failed to reallocate dynamic array.\n");
                 exit(EXIT_FAILURE);
             }
         }
     
         token = strtok(NULL, delims);
     } 
+
+    token_list[index] = NULL;
 
     return token_list;
 }
@@ -200,7 +261,7 @@ int executeBinCmdLine(char** args_list)
   
     if (pid < 0) // Forking child process failed
     { 
-        printf("Process failed"); 
+        fprintf(stderr, "process failed: cannot fork children.\n"); 
     } 
     else 
     {
@@ -208,7 +269,8 @@ int executeBinCmdLine(char** args_list)
         { 
             if (execvp(args_list[0], args_list) == -1) 
             { 
-                perror("Process failed"); 
+                fprintf(
+                    stderr, "process failed: wrond command or command does not exist.\n"); 
             }
             exit(EXIT_SUCCESS);
         } 
@@ -228,7 +290,7 @@ int executePipeCmdLine(char** args1_list, char** args2_list)
 
     if (pipe(pipe_file_descriptor) < 0)
     {
-        perror("Process failed");
+        fprintf(stderr, "process failed: cannot create pipe.\n");
         return 1;
     }
 
@@ -236,7 +298,7 @@ int executePipeCmdLine(char** args1_list, char** args2_list)
 
     if (pid1 < 0) // Failed to fork children
     {
-        perror("Process failed");
+        fprintf(stderr, "process failed: cannot fork children.\n"); 
     }
     else if (pid1 == 0) // Child processing
     {
@@ -246,7 +308,7 @@ int executePipeCmdLine(char** args1_list, char** args2_list)
 
         if(execvp(args1_list[0], args1_list) == -1) 
         {
-            perror("Process failed");
+            fprintf(stderr, "process failed: wrond command or command does not exist.\n"); 
         }
         exit(EXIT_SUCCESS);
     }
@@ -256,7 +318,7 @@ int executePipeCmdLine(char** args1_list, char** args2_list)
 
         if(pid2 < 0) // Failed to fork children
         {
-            perror("Process failed");
+            fprintf(stderr, "process failed: cannot fork children.\n"); 
         }
         else if(pid2 == 0) // Children 2 processing
         {
@@ -266,17 +328,15 @@ int executePipeCmdLine(char** args1_list, char** args2_list)
             
             if(execvp(args2_list[0], args2_list) == -1) 
             {
-                perror("Process failed");
+                fprintf(stderr, "process failed: wrond command or command does not exist.\n"); 
             }
             exit(EXIT_SUCCESS);
         }
         else // Parent processing
         {
-            close(pipe_file_descriptor[0]);
             close(pipe_file_descriptor[1]);
             wait(NULL);
         }
-        close(pipe_file_descriptor[0]);
         close(pipe_file_descriptor[1]);
         wait(NULL);
     }
@@ -300,20 +360,20 @@ int executeChangeDirCmd(char** args_list)
 {
     if (args_list[1] == NULL) 
     {
-        fprintf(stderr, "cd: expected argument to \"cd\"\n");
+        fprintf(stderr, "cd: expected argument to \"cd\".\n");
     } 
     else 
     {
         if (chdir(args_list[1]) == -1) 
         {
-            perror("cd");
+            fprintf(stderr, "cd: no such file or directory.\n");
         }
     }
-    return 1;
+    return 0;
 }
 
 int executeExitCmd()
 {
     exit(EXIT_SUCCESS);
-    return 1;
+    return 0;
 }
