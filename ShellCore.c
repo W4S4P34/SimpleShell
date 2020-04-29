@@ -57,16 +57,48 @@ int main(void)
 
         input_string = readCmdLine();
 
-        char* temp_cmdline = (char*) malloc (strlen(input_string) + 1);
-
-        if (temp_cmdline == NULL) 
+        // Add history
+        char* history_cmdline = (char*) malloc(strlen(input_string) + 1);
+                
+        if (history_cmdline == NULL) 
         {
             fprintf(
                 stderr, "allocate failed: failed to allocate temp string for %s.\n", 
                 input_string);
         }
 
-        strcpy(temp_cmdline, input_string);
+        strcpy(history_cmdline, input_string);
+    
+        addHistory(history_cmdline, history_list, &history_count);
+
+        char *temp_cmdline = NULL;
+
+        if (input_string[0] != '!')
+        {
+            temp_cmdline = (char*) malloc (strlen(input_string) + 1);
+
+            if (temp_cmdline == NULL) 
+            {
+                fprintf(
+                    stderr, "allocate failed: failed to allocate temp string for %s.\n", 
+                    input_string);
+            }
+
+            strcpy(temp_cmdline, input_string);
+        }
+        else
+        {
+            int i = xulychamthan(input_string);
+            if(history_list != NULL)
+                if(i != 0)
+                {
+                    temp_cmdline = (char*) malloc (strlen(input_string) + 1);
+                    strcpy(temp_cmdline, history_list[i-1]);
+                }
+            else
+                fprintf(stderr,"History is empty!\n");
+        }
+        
 
         int is_proper_pipe = checkPipeCmd(temp_cmdline);
         // If `is_pipe`:
@@ -139,21 +171,6 @@ int main(void)
         default:
             break;
         }
-
-        // Add history
-        temp_cmdline = (char*) malloc(strlen(input_string) + 1);
-                
-        if (temp_cmdline == NULL) 
-        {
-            fprintf(
-                stderr, "allocate failed: failed to allocate temp string for %s.\n", 
-                input_string);
-        }
-
-        strcpy(temp_cmdline, input_string);
-
-        if (command_check == 0)
-            addHistory(temp_cmdline, history_list, &history_count);
 
         free(input_string);
         free(full_cwd_dir);
@@ -279,7 +296,7 @@ int executeBuiltinCmdLine(int line_index, char** args_list, char** history_list)
     case 0: // help
         break;
     case 1: // history
-        executeHistoryCmd(history_list);
+        executeHistoryCmd(args_list, history_list);
         break;
     case 2: // cd
         executeChangeDirCmd(args_list);
@@ -399,15 +416,21 @@ int executeHelpCmd()
     
 }
 
-int executeHistoryCmd(char** history_list)
+int executeHistoryCmd(char** args_list, char** history_list)
 {
-    for(int i = 0; i < HISTORY_LIST_SIZE; i++)
-    {
+    if(args_list[1] == NULL)
+        for(int i = 0; i < HISTORY_LIST_SIZE; i++)
+        {
         if (history_list[i] == NULL)
             break;
         else
             fprintf(stdout, "%d   %s", i + 1, history_list[i]);
+        }
+    else
+    {
+        fprintf(stderr, "history: too many arguments.\n");
     }
+    
     return 0;
 }
 
@@ -437,19 +460,43 @@ int executeExitCmd()
 
 int addHistory(char* input_string, char** history_list, int* count)
 {
-    if((*count) < 10)
-    {
-        history_list[(*count)] = input_string;
-        (*count)++;
-    }
+    if(input_string[0] == '!')
+        return 0;
+    else
+        if((*count) < 10)
+        {
+            history_list[(*count)] = input_string;
+            (*count)++;
+        }
+        else
+        {
+            free(history_list[0]);
+            for(int i = 0; i < (*count) - 1; i++)
+            {
+                history_list[i] = history_list[i + 1];
+            }
+            history_list[9] = input_string;
+        }
+    return 0;
+}
+
+int xulychamthan(char* input_string)
+{
+    if (strlen(input_string)>3||(int)(input_string[3])>0||strlen(input_string)==1)
+        {
+            fprintf(stderr,"Error x0x: Command not found!\n");
+            return 0;
+        }
     else
     {
-        free(history_list[0]);
-        for(int i = 0; i < (*count) - 1; i++)
-        {
-            history_list[i] = history_list[i + 1];
-        }
-        history_list[9] = input_string;
+        if(input_string[1]=='!')
+            return 10;
+        else
+            {
+                if(strlen(input_string)==2)
+                    return (int)(input_string[1]);
+                else
+                    return 10; 
+            }
     }
-    return 0;
 }

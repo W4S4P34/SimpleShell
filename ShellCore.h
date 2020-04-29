@@ -33,11 +33,12 @@ int executePipeCmdLine(char**, char**);
 
 // Built-in features
 int executeHelpCmd();
-int executeHistoryCmd(char**);
+int executeHistoryCmd(char**, char**);
 int executeChangeDirCmd(char**);
 int executeExitCmd();
 
 // Sub features
 int addHistory(char*, char**, int*);
+int xulychamthan(char*);
 
 #endif
