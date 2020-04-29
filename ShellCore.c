@@ -3,24 +3,27 @@
 int main(void)
 {
     char* username = NULL, * full_cwd_dir = NULL, * cwd_dir = NULL;
+    char* history_cmdline = NULL;
     int cwd_buffer_coefficient;
 
-    int command_check;
+    int command_check; // Check whether command is valid or not
 
     char* input_string = NULL;  
     
     char* builtin_cmd_list[BUILTIN_LIST_SIZE] = {"help", "history", "cd", "exit"};
 
     char* history_list[HISTORY_LIST_SIZE] = {NULL};
-
     int history_count = 0;
 
     int type; // Type of commands: Built-in or Binary
 
     initGreeting();
 
+    username = getenv("USER");
+
     while(1)
     {
+        // Get information for initial display
         cwd_buffer_coefficient = 1;
         full_cwd_dir = (char*) malloc (
             MAX_BUFFER_CWD * cwd_buffer_coefficient * sizeof(char));
@@ -34,71 +37,99 @@ int main(void)
         while (getcwd(full_cwd_dir, MAX_BUFFER_CWD * cwd_buffer_coefficient) == NULL)
         {
             cwd_buffer_coefficient++;
-            full_cwd_dir = realloc(
+            char* new_full_cwd_dir = realloc(
                 full_cwd_dir, MAX_BUFFER_CWD * cwd_buffer_coefficient * sizeof(char));
             
-            if (full_cwd_dir == NULL)
+            if (new_full_cwd_dir == NULL)
             {
                 fprintf(stderr, "allocate failed: reallocate buffer failed.\n");
 
                 free(full_cwd_dir);
-
                 exit(EXIT_FAILURE);
             }
+            else
+            {
+                full_cwd_dir = new_full_cwd_dir;
+            }           
         }
 
         cwd_dir = strrchr(full_cwd_dir, '/');
 
-        username = getenv("USER");
         fprintf(stdout, "@%s: ~%s > ", username, cwd_dir);
         fflush(stdout); 
         
-        command_check = 1;
+        // Main section
+        command_check = 1; // 1 == error, 0 == successful
 
         input_string = readCmdLine();
 
-        // Add history
-        char* history_cmdline = (char*) malloc(strlen(input_string) + 1);
+        //// Add history
+        history_cmdline = (char*) malloc (strlen(input_string) + 1);
                 
         if (history_cmdline == NULL) 
         {
             fprintf(
                 stderr, "allocate failed: failed to allocate temp string for %s.\n", 
                 input_string);
+
+            free(input_string);
+            free(full_cwd_dir);
+            break;
         }
 
         strcpy(history_cmdline, input_string);
     
         addHistory(history_cmdline, history_list, &history_count);
 
-        char *temp_cmdline = NULL;
+        //// Create temp string to manipulate
+        char *temp_cmdline = (char*) malloc (strlen(input_string) + 1);
 
-        if (input_string[0] != '!')
+        if (temp_cmdline == NULL) 
         {
-            temp_cmdline = (char*) malloc (strlen(input_string) + 1);
+            fprintf(
+                stderr, 
+                "allocate failed: failed to allocate temp string for %s.\n", 
+                input_string);
 
-            if (temp_cmdline == NULL) 
+            free(input_string);
+            free(full_cwd_dir);
+            break;
+        }
+
+        if (input_string[0] == '!')
+        {
+            int history_no = handleExclamation(input_string, history_count);
+            if(history_count != 0)
             {
-                fprintf(
-                    stderr, "allocate failed: failed to allocate temp string for %s.\n", 
-                    input_string);
-            }
+                if(history_no != -1 && history_list[history_no - 1] != NULL)
+                {
+                    strcpy(temp_cmdline, history_list[history_no - 1]);
+                    fprintf(stdout, "%s", temp_cmdline);
+                }
+                else
+                {
+                    fprintf(stderr,"history: access violation!\n");
 
-            strcpy(temp_cmdline, input_string);
+                    free(input_string);
+                    free(full_cwd_dir);
+                    free(temp_cmdline);
+                    continue;
+                }
+            }
+            else
+            {
+                fprintf(stderr,"history: history is empty!\n");
+
+                free(input_string);
+                free(full_cwd_dir);
+                free(temp_cmdline);
+                continue;
+            }
         }
         else
         {
-            int i = xulychamthan(input_string);
-            if(history_list != NULL)
-                if(i != 0)
-                {
-                    temp_cmdline = (char*) malloc (strlen(input_string) + 1);
-                    strcpy(temp_cmdline, history_list[i-1]);
-                }
-            else
-                fprintf(stderr,"History is empty!\n");
+            strcpy(temp_cmdline, input_string);
         }
-        
 
         int is_proper_pipe = checkPipeCmd(temp_cmdline);
         // If `is_pipe`:
@@ -133,6 +164,10 @@ int main(void)
                 fprintf(
                     stderr, "allocate failed: failed to allocate temp string for %s.\n", 
                     cmd_list[0]);
+
+                free(cmd_list);
+                free(temp_cmdline);
+                break;
             }
 
             char* temp_cmd2 = (char*) malloc (strlen(cmd_list[1]) + 1);
@@ -142,6 +177,11 @@ int main(void)
                 fprintf(
                     stderr, "allocate failed: failed to allocate temp string for %s.\n", 
                     cmd_list[1]);
+
+                free(cmd_list);
+                free(temp_cmdline);
+                free(temp_cmd1);
+                break;
             }
 
             strcpy(temp_cmd1,cmd_list[0]);
@@ -187,21 +227,27 @@ int main(void)
     exit(EXIT_SUCCESS);
 }
 
+// ==========================================================
+
 int initGreeting(void)
 {
     clear(); // ~system("clear");
-    printf("******************************************"); 
-    printf("\n*THE SIMPLE SHELL PROJECT/OS HCMUS 18CLC3*"); 
-    printf("\n******************************************");
+    printf("******************************************\n"); 
+    printf("*THE SIMPLE SHELL PROJECT/OS HCMUS 18CLC3*\n"); 
+    printf("******************************************\n\n");
+
     char* username = getenv("USER"); 
-    printf("\n\nUSER is: @%s", username);
-    printf("\nWelcome!");
-    printf("\n"); 
+    printf("USER is: @%s\n\n", username);
+
+    printf("Welcome to simple shell!\n");
 
     sleep(1);
     clear(); // ~system("clear");
     return 0;
 }
+
+// ==========================================================
+// Core Shell
 
 char* readCmdLine(void)
 {
@@ -294,6 +340,7 @@ int executeBuiltinCmdLine(int line_index, char** args_list, char** history_list)
     switch(line_index)
     {
     case 0: // help
+        executeHelpCmd(args_list);
         break;
     case 1: // history
         executeHistoryCmd(args_list, history_list);
@@ -302,7 +349,7 @@ int executeBuiltinCmdLine(int line_index, char** args_list, char** history_list)
         executeChangeDirCmd(args_list);
         break;
     case 3: // exit
-        executeExitCmd();
+        executeExitCmd(args_list);
         break;
     default:
         break;
@@ -411,9 +458,26 @@ int executePipeCmdLine(char** args1_list, char** args2_list)
 
 // ==========================================================
 // Built-in features
-int executeHelpCmd()
+int executeHelpCmd(char** args_list)
 {
+    if(args_list[1] == NULL)
+    {
+        fprintf(stdout, "SHELL HELP\n"
+                        "List of commands supported:\n"
+                        "> cd\n"
+                        "> history (with exclamation operator '!')\n"
+                        "> exit\n"
+                        "> Redirect with '>' and '<' operators\n"
+                        "> General commands in UNIX Shell\n"
+                        "> Pipe handling\n"
+                                    );
+    }
+    else
+    {
+        fprintf(stderr, "help: too many arguments.\n");
+    }
     
+    return 0;
 }
 
 int executeHistoryCmd(char** args_list, char** history_list)
@@ -421,10 +485,10 @@ int executeHistoryCmd(char** args_list, char** history_list)
     if(args_list[1] == NULL)
         for(int i = 0; i < HISTORY_LIST_SIZE; i++)
         {
-        if (history_list[i] == NULL)
-            break;
-        else
-            fprintf(stdout, "%d   %s", i + 1, history_list[i]);
+            if (history_list[i] == NULL)
+                break;
+            else
+                fprintf(stdout, "%d   %s", i + 1, history_list[i]);
         }
     else
     {
@@ -450,13 +514,17 @@ int executeChangeDirCmd(char** args_list)
     return 0;
 }
 
-int executeExitCmd()
+int executeExitCmd(char** args_list)
 {
+    if(args_list[1] != NULL)
+    {
+        fprintf(stderr, "exit: too many arguments.\n");
+    }
     return 0;
 }
 
 // ==========================================================
-// Built-in features
+// Sub features
 
 int addHistory(char* input_string, char** history_list, int* count)
 {
@@ -480,23 +548,35 @@ int addHistory(char* input_string, char** history_list, int* count)
     return 0;
 }
 
-int xulychamthan(char* input_string)
+int handleExclamation(char* input_string, int count)
 {
-    if (strlen(input_string)>3||(int)(input_string[3])>0||strlen(input_string)==1)
-        {
-            fprintf(stderr,"Error x0x: Command not found!\n");
-            return 0;
-        }
+    if (strlen(input_string) > 4)
+    {
+        fprintf(stderr, "history: too many arguments.\n");
+        return -1;
+    }
+    else if (strlen(input_string) == 2)
+    {
+        fprintf(stderr, "history: wrong command.\n");
+        return -1;
+    }
     else
     {
-        if(input_string[1]=='!')
-            return 10;
+        if(strlen(input_string) == 3 && input_string[1] == '!')
+            return count;
+        else if(strlen(input_string) == 3 && 
+            (int)((input_string[1]) - 48) > 0 && (int)((input_string[1]) - 48) <= 9)
+        {
+            return (int)((input_string[1]) - 48);
+        }
+        else if(strlen(input_string) == 4 && 
+            (int)((input_string[1]) - 48) == 1 && (int)((input_string[2]) - 48) == 0)
+        {
+            return 10; 
+        }
         else
-            {
-                if(strlen(input_string)==2)
-                    return (int)(input_string[1]);
-                else
-                    return 10; 
-            }
+        {
+            return -1;
+        }
     }
 }
