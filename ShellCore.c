@@ -165,9 +165,7 @@ int main(void)
                     stderr, "allocate failed: failed to allocate temp string for %s.\n", 
                     cmd_list[0]);
 
-                free(cmd_list);
-                free(temp_cmdline);
-                break;
+                exit(EXIT_FAILURE);
             }
 
             char* temp_cmd2 = (char*) malloc (strlen(cmd_list[1]) + 1);
@@ -178,10 +176,7 @@ int main(void)
                     stderr, "allocate failed: failed to allocate temp string for %s.\n", 
                     cmd_list[1]);
 
-                free(cmd_list);
-                free(temp_cmdline);
-                free(temp_cmd1);
-                break;
+                exit(EXIT_FAILURE);
             }
 
             strcpy(temp_cmd1,cmd_list[0]);
