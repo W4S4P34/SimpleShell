@@ -1,0 +1,5 @@
+out.txt
+README.md
+ShellCore
+ShellCore.c
+ShellCore.h

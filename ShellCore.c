@@ -8,7 +8,12 @@ int main(void)
 
     int command_check; // Check whether command is valid or not
 
-    char* input_string = NULL;  
+    char* input_string = NULL;
+
+    int args_count = 0;  
+    int args1_count = 0;  
+    int args2_count = 0;  
+
     
     char* builtin_cmd_list[BUILTIN_LIST_SIZE] = {"help", "history", "cd", "exit"};
 
@@ -131,15 +136,51 @@ int main(void)
             strcpy(temp_cmdline, input_string);
         }
 
+        int is_proper_greater = checkRedGreCmd(temp_cmdline);
+        int is_proper_smaller = checkRedSmaCmd(temp_cmdline);
+
+        int is_proper_redirect = 1; // 1 is not proper, 0 is proper, -1 is no redirect
+
+        if (is_proper_greater > 1 || is_proper_smaller > 1
+                || is_proper_greater == 1 && is_proper_smaller > 0
+                || is_proper_greater > 0 && is_proper_smaller == 1)
+        {
+            fprintf(stderr,"redirect: too many redirect options!\n");
+
+            free(input_string);
+            free(full_cwd_dir);
+            free(temp_cmdline);
+            continue;
+        }
+        else if (is_proper_greater == 0 && is_proper_smaller == 0)
+        {
+            is_proper_redirect = -1;
+        }
+        else
+        {
+            is_proper_redirect = 0;
+        }
+        
         int is_proper_pipe = checkPipeCmd(temp_cmdline);
         // If `is_pipe`:
         // == 0: there is no pipe
         // == 1: there is 1 pipe
+        // else: cannot handle
+
+        if (is_proper_pipe > 0 && is_proper_redirect == 0)
+        {
+            fprintf(stderr,"redirect and pipe: too many options!\n");
+
+            free(input_string);
+            free(full_cwd_dir);
+            free(temp_cmdline);
+            continue;
+        }
 
         switch (is_proper_pipe)
         {
         case 0: ;    
-            char** args_list = parseCmdLine(temp_cmdline, TOKENS_DELIM);
+            char** args_list = parseCmdLine(temp_cmdline, TOKENS_DELIM, &args_count);
 
             type = getCmdType(args_list[0], builtin_cmd_list);
             
@@ -147,7 +188,24 @@ int main(void)
                 command_check = executeBuiltinCmdLine(type, args_list, history_list);            
             else
             {
-                command_check = executeBinCmdLine(args_list);
+                if (is_proper_redirect == 0)
+                {
+                    char file[strlen(args_list[args_count - 1]) + 1];
+
+                    strcpy(file,  args_list[args_count - 1]);
+
+                    args_list[args_count - 1] = NULL;
+
+                    command_check = executeBinCmdLine(args_list,
+                                        is_proper_smaller, is_proper_greater, 
+                                        file);
+                }
+                else if (is_proper_redirect == -1)
+                {
+                    command_check = executeBinCmdLine(args_list,
+                                        is_proper_smaller, is_proper_greater, 
+                                        NULL);
+                }
             }
 
             free(args_list);
@@ -155,7 +213,7 @@ int main(void)
             break;
         
         case 1: ;
-            char** cmd_list = parseCmdLine(temp_cmdline, TOKEN_PIPE_DELIM);
+            char** cmd_list = parseCmdLine(temp_cmdline, TOKEN_PIPE_DELIM, &args_count);
 
             char* temp_cmd1 = (char*) malloc (strlen(cmd_list[0]) + 1);
 
@@ -182,8 +240,8 @@ int main(void)
             strcpy(temp_cmd1,cmd_list[0]);
             strcpy(temp_cmd2,cmd_list[1]);
 
-            char** args1_pipe_list = parseCmdLine(temp_cmd1, TOKENS_DELIM);
-            char** args2_pipe_list = parseCmdLine(temp_cmd2, TOKENS_DELIM);
+            char** args1_pipe_list = parseCmdLine(temp_cmd1, TOKENS_DELIM, &args1_count);
+            char** args2_pipe_list = parseCmdLine(temp_cmd2, TOKENS_DELIM, &args2_count);
 
             type = getCmdType(args1_pipe_list[0], builtin_cmd_list);
 
@@ -204,6 +262,7 @@ int main(void)
             break;
 
         default:
+            fprintf(stderr, "pipe: too many pipes, cannot handle.\n");
             break;
         }
 
@@ -266,23 +325,67 @@ char* readCmdLine(void)
     return line;
 }
 
-int checkPipeCmd(char* line)
+int checkRedGreCmd(char* line)
 {
-    char* pipe_checker = NULL;
+    int greaterope_counter = 0;
     
-    pipe_checker = strchr(line, '|');
+    int i = 0;
 
-    if(pipe_checker != NULL)
+    while(line[i] != '\0')
     {
-        return 1;
+        if (line[i] == '>')
+        {
+            greaterope_counter++;
+        }
+
+        i++;
     }
-    else return 0;
+
+    return greaterope_counter;
 }
 
-char** parseCmdLine(char* cmdline, char* delims)
+int checkRedSmaCmd(char* line)
+{
+    int smallerope_counter = 0;
+    
+    int i = 0;
+
+    while(line[i] != '\0')
+    {
+        if (line[i] == '<')
+        {
+            smallerope_counter++;
+        }
+
+        i++;
+    }
+
+    return smallerope_counter;
+}
+
+int checkPipeCmd(char* line)
+{
+    int pipe_counter = 0;
+    
+    int i = 0;
+
+    while(line[i] != '\0')
+    {
+        if (line[i] == '|')
+        {
+            pipe_counter++;
+        }
+
+        i++;
+    }
+
+    return pipe_counter;
+}
+
+char** parseCmdLine(char* cmdline, char* delims, int* index)
 {
     int buffer_coefficient = 1;
-    int index = 0;
+    (*index) = 0;
 
     char** token_list = (char**) malloc (
         TOKENS_BUFFER_SIZE * buffer_coefficient * sizeof(char*));
@@ -296,10 +399,10 @@ char** parseCmdLine(char* cmdline, char* delims)
     char* token = strtok(cmdline, delims);
     while(token != NULL)
     {
-        token_list[index] = token;
-        index++;
+        token_list[(*index)] = token;
+        (*index)++;
 
-        if (index >= TOKENS_BUFFER_SIZE * buffer_coefficient) 
+        if ((*index) >= TOKENS_BUFFER_SIZE * buffer_coefficient) 
         {
             buffer_coefficient++;
             token_list = realloc(
@@ -314,7 +417,7 @@ char** parseCmdLine(char* cmdline, char* delims)
         token = strtok(NULL, delims);
     } 
 
-    token_list[index] = NULL;
+    token_list[(*index)] = NULL;
 
     return token_list;
 }
@@ -356,7 +459,9 @@ int executeBuiltinCmdLine(int line_index, char** args_list, char** history_list)
         return 0;
 }
 
-int executeBinCmdLine(char** args_list)
+int executeBinCmdLine(char** args_list, 
+                        int is_proper_smaller, int is_proper_greater,
+                        char* file)
 {
     pid_t pid = fork();  
     
@@ -369,6 +474,38 @@ int executeBinCmdLine(char** args_list)
     {
         if (pid == 0) // Child process
         { 
+            if (is_proper_smaller == 1)
+            {
+                int in_fd = open(file, O_RDONLY);
+
+                if (in_fd == -1)
+                {
+                    fprintf(stderr, "file: cannot open file.\n");
+                    exit(EXIT_FAILURE);
+                }
+                else
+                {
+                    dup2(in_fd, STDIN_FILENO);
+                    close(in_fd);
+                }
+            }
+
+            if (is_proper_greater == 1)
+            {
+                int out_fd = creat(file , 0644);
+
+                if (out_fd == -1)
+                {
+                    fprintf(stderr, "file: cannot create file.\n");
+                    exit(EXIT_FAILURE);
+                }
+                else
+                {
+                    dup2(out_fd, STDOUT_FILENO);
+                    close(out_fd);
+                }
+            }
+
             if (execvp(args_list[0], args_list) == -1) 
             { 
                 fprintf(
