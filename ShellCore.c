@@ -136,14 +136,45 @@ int main(void)
             strcpy(temp_cmdline, input_string);
         }
 
-        int is_proper_greater = checkRedGreCmd(temp_cmdline);
-        int is_proper_smaller = checkRedSmaCmd(temp_cmdline);
+        int ampersand_no = checkAmpersandCmd(temp_cmdline);
+
+        if (ampersand_no > 1)
+        {
+            fprintf(stderr,"ampersand: too many ampersand options!\n");
+
+            free(input_string);
+            free(full_cwd_dir);
+            free(temp_cmdline);
+            continue;
+        }
+        else if (ampersand_no == -1)
+        {
+            fprintf(stderr,"ampersand: place ampersand at wrong position!\n");
+
+            free(input_string);
+            free(full_cwd_dir);
+            free(temp_cmdline);
+            continue;
+        }
+
+        int greater_ope_no = checkRedGreCmd(temp_cmdline);
+        int smaller_ope_no = checkRedSmaCmd(temp_cmdline);
 
         int is_proper_redirect = 1; // 1 is not proper, 0 is proper, -1 is no redirect
 
-        if (is_proper_greater > 1 || is_proper_smaller > 1
-                || is_proper_greater == 1 && is_proper_smaller > 0
-                || is_proper_greater > 0 && is_proper_smaller == 1)
+        if (ampersand_no > 0 && greater_ope_no > 0
+                || ampersand_no > 0 && smaller_ope_no > 0)
+        {
+            fprintf(stderr,"ampersand and redirect: redirect not support ampersand!\n");
+
+            free(input_string);
+            free(full_cwd_dir);
+            free(temp_cmdline);
+            continue;
+        }
+        else if (greater_ope_no > 1 || smaller_ope_no > 1
+                    || greater_ope_no == 1 && smaller_ope_no > 0
+                    || greater_ope_no > 0 && smaller_ope_no == 1)
         {
             fprintf(stderr,"redirect: too many redirect options!\n");
 
@@ -152,7 +183,7 @@ int main(void)
             free(temp_cmdline);
             continue;
         }
-        else if (is_proper_greater == 0 && is_proper_smaller == 0)
+        else if (greater_ope_no == 0 && smaller_ope_no == 0)
         {
             is_proper_redirect = -1;
         }
@@ -161,15 +192,24 @@ int main(void)
             is_proper_redirect = 0;
         }
         
-        int is_proper_pipe = checkPipeCmd(temp_cmdline);
+        int pipe_no = checkPipeCmd(temp_cmdline);
         // If `is_pipe`:
         // == 0: there is no pipe
         // == 1: there is 1 pipe
         // else: cannot handle
 
-        if (is_proper_pipe > 0 && is_proper_redirect == 0)
+        if (pipe_no > 0 && is_proper_redirect == 0)
         {
-            fprintf(stderr,"redirect and pipe: too many options!\n");
+            fprintf(stderr,"redirect and pipe: pipe not support redirect!\n");
+
+            free(input_string);
+            free(full_cwd_dir);
+            free(temp_cmdline);
+            continue;
+        }
+        else if (pipe_no > 0 && ampersand_no > 0)
+        {
+            fprintf(stderr,"ampersand and pipe: pipe not support ampersand!\n");
 
             free(input_string);
             free(full_cwd_dir);
@@ -177,16 +217,15 @@ int main(void)
             continue;
         }
 
-        switch (is_proper_pipe)
+        switch (pipe_no)
         {
         case 0: ;    
             char** args_list = parseCmdLine(temp_cmdline, TOKENS_DELIM, &args_count);
 
             type = getCmdType(args_list[0], builtin_cmd_list);
-            
-            if (type != -1)
-                command_check = executeBuiltinCmdLine(type, args_list, history_list);            
-            else
+
+                        
+            if (type == -1)
             {
                 if (is_proper_redirect == 0)
                 {
@@ -197,17 +236,27 @@ int main(void)
                     args_list[args_count - 1] = NULL;
 
                     command_check = executeBinCmdLine(args_list,
-                                        is_proper_smaller, is_proper_greater, 
-                                        file);
+                                        smaller_ope_no, greater_ope_no, 
+                                        file,
+                                        ampersand_no);
                 }
                 else if (is_proper_redirect == -1)
                 {
                     command_check = executeBinCmdLine(args_list,
-                                        is_proper_smaller, is_proper_greater, 
-                                        NULL);
+                                        smaller_ope_no, greater_ope_no, 
+                                        NULL,
+                                        ampersand_no);
                 }
             }
-
+            else if (type != -1 && ampersand_no == 0 && is_proper_redirect == -1)
+            {
+                command_check = executeBuiltinCmdLine(type, args_list, history_list);
+            }
+            else
+            {               
+                fprintf(stderr, "builtin: builtin not support redirect or ampersand.\n");
+            }
+            
             free(args_list);
             free(temp_cmdline);
             break;
@@ -246,7 +295,7 @@ int main(void)
             type = getCmdType(args1_pipe_list[0], builtin_cmd_list);
 
             if (type != -1)
-                command_check = executeBuiltinCmdLine(type, args1_pipe_list, history_list);            
+                fprintf(stderr, "pipe: built-in cmd does not support pipe.\n");
             else
             {
                 command_check = executePipeCmdLine(args1_pipe_list, args2_pipe_list);
@@ -323,6 +372,29 @@ char* readCmdLine(void)
     }
 
     return line;
+}
+
+int checkAmpersandCmd(char* line)
+{
+    int ampersand_counter = 0;
+    
+    int i = 0;
+
+    while(line[i] != '\0')
+    {
+        if (line[i] == '&' && line[i + 1] == '\n')
+        {
+            ampersand_counter++;
+        }
+        else if (line[i] == '&' && line[i + 1] != '\n')
+        {
+            return -1;
+        }
+        
+        i++;
+    }
+
+    return ampersand_counter;
 }
 
 int checkRedGreCmd(char* line)
@@ -461,10 +533,14 @@ int executeBuiltinCmdLine(int line_index, char** args_list, char** history_list)
 
 int executeBinCmdLine(char** args_list, 
                         int is_proper_smaller, int is_proper_greater,
-                        char* file)
+                        char* file,
+                        int ampersand_count)
 {
-    pid_t pid = fork();  
+    pid_t wpid;
+    int status;
     
+    pid_t pid = fork();
+
     if (pid < 0) // Forking child process failed
     { 
         fprintf(stderr, "process failed: cannot fork children.\n"); 
@@ -512,13 +588,28 @@ int executeBinCmdLine(char** args_list,
                     stderr, "process failed: wrond command or command does not exist.\n");
                 exit(EXIT_FAILURE);
             }
+            
             exit(EXIT_SUCCESS);
         } 
         else // Parent process - Waiting for child to terminate 
         { 
-            wait(NULL);  
+            if (ampersand_count == 0)
+            {
+                // Case normal
+                wpid = waitpid(pid, &status, 0); 
+            }
+            // Case bg
+            else
+            {
+                fprintf(stdout, "[1] %d\n", pid);
+                wpid = waitpid(pid, &status, WUNTRACED);
+                if(WIFEXITED(status))
+                {
+                    fprintf(stdout, "[1]+ Done\n");
+                }
+            }
         }  
-    } 
+    }     
 
     return 0;
 }
@@ -526,7 +617,8 @@ int executeBinCmdLine(char** args_list,
 int executePipeCmdLine(char** args1_list, char** args2_list)
 {
     int pipe_file_descriptor[2];
-    pid_t pid1, pid2;
+    pid_t pid1, pid2, wpid;
+    int status;
 
     if (pipe(pipe_file_descriptor) < 0)
     {
@@ -580,8 +672,14 @@ int executePipeCmdLine(char** args1_list, char** args2_list)
         else // Parent processing
         {
             close(pipe_file_descriptor[1]);
-            wait(NULL);
-            wait(NULL);
+            do 
+            {
+                wpid = waitpid(pid1, &status, WUNTRACED);
+            } while (!WIFEXITED(status) && !WIFSIGNALED(status)); 
+            do 
+            {
+                wpid = waitpid(pid2, &status, WUNTRACED);
+            } while (!WIFEXITED(status) && !WIFSIGNALED(status));  
         }        
     }
 

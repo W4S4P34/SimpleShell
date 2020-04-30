@@ -9,10 +9,12 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
+#include <syslog.h>
+#include <signal.h>
 
 // Macro
 #define TOKENS_BUFFER_SIZE 64
-#define TOKENS_DELIM " \t\r\n\a<>"
+#define TOKENS_DELIM " \t\r\n\a<>&"
 #define TOKEN_PIPE_DELIM "|"
 
 #define MAX_BUFFER_CWD 1024
@@ -26,13 +28,14 @@
 // Prototypes
 int initGreeting(void);
 char* readCmdLine(void);
+int checkAmpersandCmd(char*);
 int checkRedGreCmd(char*);
 int checkRedSmaCmd(char*);
 int checkPipeCmd(char*);
 char** parseCmdLine(char*, char*, int*);
 int getCmdType(char*, char**);
 int executeBuiltinCmdLine(int, char**, char**);
-int executeBinCmdLine(char**, int, int, char*);
+int executeBinCmdLine(char**, int, int, char*, int);
 int executePipeCmdLine(char**, char**);
 
 // Built-in features
