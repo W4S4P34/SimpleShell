@@ -672,14 +672,8 @@ int executePipeCmdLine(char** args1_list, char** args2_list)
         else // Parent processing
         {
             close(pipe_file_descriptor[1]);
-            do 
-            {
-                wpid = waitpid(pid1, &status, WUNTRACED);
-            } while (!WIFEXITED(status) && !WIFSIGNALED(status)); 
-            do 
-            {
-                wpid = waitpid(pid2, &status, WUNTRACED);
-            } while (!WIFEXITED(status) && !WIFSIGNALED(status));  
+            wpid = waitpid(pid1, &status, 0);
+            wpid = waitpid(pid2, &status, 0);
         }        
     }
 
