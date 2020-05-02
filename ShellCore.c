@@ -233,6 +233,15 @@ int main(void)
 
                     strcpy(file,  args_list[args_count - 1]);
 
+                    if (args_count == 1 && (greater_ope_no > 0 || smaller_ope_no > 0))
+                    {
+                        fprintf(stderr, "redirect: redirect from/to nowhere.\n");
+
+                        free(args_list);
+                        free(temp_cmdline);
+                        break;
+                    }
+
                     args_list[args_count - 1] = NULL;
 
                     command_check = executeBinCmdLine(args_list,
